@@ -1,11 +1,141 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import Layout from '@/layouts/Layout.astro';
+import { ClockCard } from '@/components/ClockCard';
+import { AddClockDialog } from '@/components/AddClockDialog';
+import { AnalogClock } from '@/components/AnalogClock';
+import { DigitalClock } from '@/components/DigitalClock';
+import { Card, CardContent } from '@/components/ui/card';
+import { format } from 'date-fns';
+import { findTimezoneByValue } from '@/data/timezones';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+interface ClockData {
+  id: string;
+  name: string;
+  timezone: string;
+}
+
+// Get local timezone
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const localTimezoneInfo = findTimezoneByValue(timezone);
+const localTimezoneShortForm = localTimezoneInfo ? localTimezoneInfo.shortForm : new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ')[2] || "";
+
+// Get current date
+const currentDate = format(new Date(), "EEEE, MMMM d, yyyy");
+
+// Load clocks from localStorage
+const loadClocks = (): ClockData[] => {
+  if (typeof window !== 'undefined') {
+    const savedClocks = localStorage.getItem('clocks');
+    return savedClocks ? JSON.parse(savedClocks) : [];
+  }
+  return [];
+};
+
+const clocks = loadClocks();
 ---
 
 <Layout>
-	<Welcome />
+  <div class="min-h-screen bg-gray-50">
+    <div class="container mx-auto py-6 px-4 sm:px-6">
+      {/* Header */}
+      <header class="mb-8 text-center">
+        <h1 class="text-3xl font-bold mb-2 text-gray-900">World Clock</h1>
+        <p class="text-gray-600">{currentDate}</p>
+      </header>
+
+      {/* Local time */}
+      <Card class="mb-10 bg-gradient-to-r from-purple-100 to-indigo-50">
+        <CardContent class="py-6">
+          <div class="flex flex-col md:flex-row items-center justify-center gap-8">
+            <div>
+              <h2 class="text-xl font-semibold text-center mb-2">Your Local Time</h2>
+              <AnalogClock timezone={timezone} size="large" />
+            </div>
+            <div class="text-center">
+              <div class="mb-2 text-sm text-gray-600">
+                {timezone.replace(/_/g, " ")}
+                {localTimezoneShortForm && (
+                  <span class="ml-2 font-semibold text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">
+                    {localTimezoneShortForm}
+                  </span>
+                )}
+              </div>
+              <DigitalClock
+                timezone={timezone}
+                class="text-4xl md:text-5xl font-bold text-gray-900"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* World Clocks */}
+      <div class="mb-8 flex items-center justify-between">
+        <h2 class="text-2xl font-bold text-gray-900">Your World Clocks</h2>
+        <AddClockDialog />
+      </div>
+
+      {clocks.length === 0 ? (
+        <div class="text-center py-10 bg-white rounded-lg shadow-sm border border-gray-100">
+          <p class="text-gray-600">You haven't added any clocks yet.</p>
+          <p class="text-gray-600">Click "Add New Clock" to get started!</p>
+        </div>
+      ) : (
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {clocks.map((clock) => (
+            <ClockCard
+              key={clock.id}
+              clock={clock}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
 </Layout>
+
+<script>
+  // Client-side code for handling clock management
+  import { toast } from "sonner"
+
+  interface ClockData {
+    id: string;
+    name: string;
+    timezone: string;
+  }
+
+  // Handle adding a new clock
+  function handleAddClock(clock: ClockData) {
+    const clocks = JSON.parse(localStorage.getItem('clocks') || '[]');
+    const updatedClocks = [...clocks, clock];
+    localStorage.setItem('clocks', JSON.stringify(updatedClocks));
+    toast(`${clock.name} has been added to your world clocks.`, {
+      duration: 3000,
+    });
+    window.location.reload();
+  }
+
+  // Handle removing a clock
+  function handleRemoveClock(id: string) {
+    const clocks = JSON.parse(localStorage.getItem('clocks') || '[]');
+    const updatedClocks = clocks.filter((clock: ClockData) => clock.id !== id);
+    localStorage.setItem('clocks', JSON.stringify(updatedClocks));
+    toast("The clock has been removed from your world clocks.", {
+      duration: 3000,
+    });
+    window.location.reload();
+  }
+
+  // Add event listeners for clock management
+  document.addEventListener('DOMContentLoaded', () => {
+    const addClockDialog = document.querySelector('add-clock-dialog');
+    if (addClockDialog) {
+      addClockDialog.addEventListener('add', (e: CustomEvent) => handleAddClock(e.detail));
+    }
+
+    const clockCards = document.querySelectorAll('clock-card');
+    clockCards.forEach(card => {
+      card.addEventListener('remove', (e: CustomEvent) => handleRemoveClock(e.detail));
+    });
+  });
+</script>
